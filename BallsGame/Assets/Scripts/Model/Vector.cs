@@ -19,7 +19,7 @@ namespace BallGame.Model
             get
             {
                 var l = Length;
-                return new Vector(X / l, Y / l);
+                return l > 0 ? new Vector(X / l, Y / l) : Zero;
             }
         }
 

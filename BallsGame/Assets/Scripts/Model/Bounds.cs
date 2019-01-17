@@ -7,5 +7,11 @@ namespace BallGame.Model
     {
         public Vector Center;
         public Vector Extends;
+
+        public Bounds(float width, float height)
+        {
+            Extends = new Vector(width, height);
+            Center = Vector.Zero;
+        }
     }
 }

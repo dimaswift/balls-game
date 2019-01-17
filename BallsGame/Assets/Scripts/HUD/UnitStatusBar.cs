@@ -1,14 +1,13 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
-using BallGame.View;
+using BallGame.Views;
 using UnityEngine;
 using UnityEngine.UI;
 
-namespace BallGame.HUD
+namespace BallGame.Hud
 {
-	public class UnitStatusBar : MonoBehaviour
+	public class UnitStatusBar : HudElement
 	{
-		
 		[SerializeField] Image _barPrefab;
 		[SerializeField] RectTransform _container;
 		
@@ -16,19 +15,20 @@ namespace BallGame.HUD
 		readonly List<Color> _colorValuesBuffer = new List<Color>();
 		readonly List<Image> _bars = new List<Image>();
 
-		void Awake()
+		protected override void OnInit(HudController hudController)
 		{
 			_barPrefab.gameObject.SetActive(false);
 		}
 
 		void Update()
 		{
-			var simulationView = SimulationView.Instance;
-			if(simulationView == null || simulationView.Simulation == null)
+			var simulationView = Controller.App.SimulationView;
+			var simulationController = Controller.App.SimulationController;
+			if(simulationView == null || simulationController.Simulation == null)
 				return;
 			_radiusValuesBuffer.Clear();
 			_colorValuesBuffer.Clear();
-			var totalRadius = simulationView.Simulation.GetTotalRadius();
+			var totalRadius = simulationController.GetTotalRadius();
 			if(totalRadius == 0)
 			{
 				SetBars(_radiusValuesBuffer, _colorValuesBuffer);
@@ -36,7 +36,7 @@ namespace BallGame.HUD
 			}
 			for (int i = 0; i < simulationView.Colors.Length; i++)
 			{
-				var rad = simulationView.Simulation.GetTotalRadius(i);
+				var rad = simulationController.GetTotalRadius(i);
 				var ratio = rad / totalRadius;
 				_radiusValuesBuffer.Add(ratio);
 				_colorValuesBuffer.Add(simulationView.Colors[i].color);
@@ -81,5 +81,4 @@ namespace BallGame.HUD
 			}
 		}
 	}
-
 }

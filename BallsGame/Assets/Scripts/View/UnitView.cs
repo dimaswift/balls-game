@@ -1,35 +1,38 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
-using BallGame.Controller;
+using BallGame.Controllers;
+using BallGame.Model;
 using BallGame.Utils;
 using UnityEngine;
 
-namespace BallGame.View
+namespace BallGame.Views
 {
-	public class UnitView : MonoBehaviour, IPoolable, IUnitListener
+	public class UnitView : View, IPoolable
 	{
+		public UnitController Controller
+		{
+			get { return _controller; }
+		}
+		
 		[SerializeField] Transform _meshTransform;
 		[SerializeField] MeshRenderer _meshRenderer;
 		
-		Unit _unit;
+		UnitController _controller;
 		Transform _transform;
-		SimulationView _simulationView;
-		
-		public void SetUp(Unit unit, SimulationView view)
+
+		public void SetUp(UnitController controller, SimulationView simulationView)
 		{
-			_simulationView = view;
-			_unit = unit;
-			_unit.AddListener(this);
-			_meshRenderer.sharedMaterial = view.GetMaterialType(_unit.State.Type);
-			UpdateTransform();
+			_controller = controller;
+			_meshRenderer.sharedMaterial = simulationView.GetColorMaterial(_controller.Unit.Type);
+			Render();
 		}
 
-		public void UpdateTransform()
+		public override void Render()
 		{
-			if(_unit == null)
+			if(_controller == null)
 				return;
-			_transform.position = new Vector3(_unit.State.Position.X, _unit.State.Position.Y);
-			_meshTransform.localScale = Vector3.one * _unit.State.Radius * 2;
+			_transform.position = new Vector3(_controller.Unit.Position.X, _controller.Unit.Position.Y);
+			_meshTransform.localScale = Vector3.one * _controller.Unit.Radius * 2;
 		}
 
 		public void Init()
@@ -51,12 +54,5 @@ namespace BallGame.View
 		{
 			gameObject.SetActive(false);
 		}
-
-		public void OnUnitDestroyed()
-		{
-			Return();
-			_simulationView.OnUnitDestroyed(this);
-		}
 	}
-
 }

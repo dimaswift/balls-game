@@ -123,18 +123,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 2819fe25b90ea984bb36f6bfb47697e0, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _simSpeed: 1
-  _createSimulationOnAwake: 0
-  _configData: {fileID: 4900000, guid: 8128ae7bbf0d02145ae0dd127e4e0541, type: 3}
-  _colors:
-  - {fileID: 2100000, guid: 27b10f05decedab418f95d59f415481d, type: 2}
-  - {fileID: 2100000, guid: 986ed211920c35044a886083f74cac5f, type: 2}
-  _minRadius: 0.2
   _unitViewPrefab: {fileID: 114299541658665230, guid: 78322555df8988c40a91cdc2b742bab0,
     type: 2}
   _fieldTransform: {fileID: 4452893741107552}
-  _onSimulationFinished:
-    m_PersistentCalls:
-      m_Calls: []
-    m_TypeName: UnityEngine.Events.UnityEvent, UnityEngine.CoreModule, Version=0.0.0.0,
-      Culture=neutral, PublicKeyToken=null
+  _colors:
+  - {fileID: 2100000, guid: 27b10f05decedab418f95d59f415481d, type: 2}
+  - {fileID: 2100000, guid: 986ed211920c35044a886083f74cac5f, type: 2}

@@ -2,13 +2,13 @@
 using BallGame.Model;
 using UnityEngine;
 
-namespace BallGame.Controller
+namespace BallGame.Controllers
 {
 	public class ConfigLoader
 	{
-		readonly TextAsset _jsonData;
+		readonly string _jsonData;
 
-		public ConfigLoader(TextAsset data)
+		public ConfigLoader(string data)
 		{
 			_jsonData = data;
 		}
@@ -22,7 +22,7 @@ namespace BallGame.Controller
 			}
 			try
 			{
-				return JsonUtility.FromJson<GameConfigData>(_jsonData.text).GameConfig;
+				return JsonUtility.FromJson<GameConfigData>(_jsonData).GameConfig;
 			}
 			catch (Exception e)
 			{

@@ -1,213 +1,136 @@
 ﻿using System;
 using System.Collections;
 using System.Collections.Generic;
-using BallGame.Controller;
+using BallGame.Controllers;
 using BallGame.Model;
 using BallGame.Utils;
 using UnityEngine;
 using UnityEngine.Events;
 using Random = UnityEngine.Random;
 
-namespace BallGame.View
+namespace BallGame.Views
 {
-	public class SimulationView : MonoBehaviour, IUnitCollisionHandler
+	public class SimulationView : View
 	{
-		public UnityEvent OnSimulationFinished
-		{
-			get { return _onSimulationFinished; }
-		}
-
-		public Simulation Simulation
-		{
-			get { return _simulation; }
-		}
-
 		public Material[] Colors
 		{
 			get { return _colors; }
 		}
 		
-		public float Speed
-		{
-			get
-			{
-				return _simSpeed;
-			}
-			set
-			{
-				value = Mathf.Clamp(value, 0, 25);
-				_simSpeed = value;
-			}
-		}
-
-		static SimulationView _instance;
-
-		public static SimulationView Instance
-		{
-			get
-			{
-				if (_instance == null)
-				{
-					_instance = FindObjectOfType<SimulationView>();
-				}
-				return _instance;
-			}
-		}
-
-		[SerializeField, Range(0f, 5f)] float _simSpeed = 1;
-		[SerializeField] bool _createSimulationOnAwake;
-		[SerializeField] TextAsset _configData;
-		[SerializeField] Material[] _colors;
-		[SerializeField] float _minRadius = .2f;
 		[SerializeField] UnitView _unitViewPrefab;
 		[SerializeField] Transform _fieldTransform;
-		[SerializeField] UnityEvent _onSimulationFinished;
-
-		SimulationConfig _config;
-		Simulation _simulation;
+		[SerializeField] Material[] _colors;
+		
+		SimulationController _controller;
+		
 		readonly List<UnitView> _units = new List<UnitView>();
 		Camera _cam;
 		Pool<UnitView> _unitsPool;
-		readonly List<int> _intValuesBuffer = new List<int>();
+
+		public void Init(SimulationConfig config)
+		{
+			_unitsPool = new Pool<UnitView>(() => Instantiate(_unitViewPrefab), config.numUnitsToSpawn);
+		}
 		
-		const string SIM_SAVE_KEY = "sim";
-
-		void Awake()
+		public void SetUp(SimulationController controller)
 		{
-			if (_instance != null && _instance != this)
-			{
-				return;
-			}
-			_instance = this;
-			Init();
-			if(_createSimulationOnAwake)
-				CreateNewSimulation();
-		}
-
-		void Update()
-		{
-			if(_simulation == null)
-				return;
-			_simulation.Speed = _simSpeed;
-			_simulation.Tick(Time.deltaTime);
-			foreach (var unit in _units)
-			{
-				unit.UpdateTransform();
-			}
-		}
-
-		public void Init()
-		{
-			_config = new ConfigLoader(_configData).LoadConfig();
 			_cam = Camera.main;
-			_unitsPool = new Pool<UnitView>(() => Instantiate(_unitViewPrefab), _config.numUnitsToSpawn);
-			SetConfig(_config);
-		}
-
-		public bool CanCollide(Unit a, Unit b)
-		{
-			return a.State.Type == b.State.Type;
-		}
-
-		public void OnUnitsGoThrough(Unit a, Unit b)
-		{
-			var dist = _simulation.GetOverlappingDistance(a, b) / 2;
-			a.SetRadius(a.State.Radius - dist);
-			b.SetRadius(b.State.Radius - dist);
-		
-			if (a.State.Radius < _minRadius || b.State.Radius < _minRadius)
+			_controller = controller;
+			foreach (var activeUnit in _controller.ActiveUnits)
 			{
-				_simulation.DestroyUnit(a);
-				_simulation.DestroyUnit(b);
+				SpawnUnitView(activeUnit);
 			}
-		}
-		
-		public void OnUnitDestroyed(UnitView unitView)
-		{
-			if (IsSimulationOver())
-			{
-				_onSimulationFinished.Invoke();
-			}
+			_controller.OnUnitDestroyed += OnUnitDestroyed;
+			SetFieldSize(_controller.Config.gameAreaWidth, _controller.Config.gameAreaHeight);
 		}
 
-		bool IsSimulationOver()
+		void OnUnitDestroyed(UnitController unit)
 		{
-			_intValuesBuffer.Clear();
-			foreach (var activeUnit in _simulation.ActiveUnits)
-			{
-				if(_intValuesBuffer.FindIndex(t => activeUnit.State.Type == t) < 0)
-					_intValuesBuffer.Add(activeUnit.State.Type);
-			}
-			return _intValuesBuffer.Count <= 1;
+			var unitView = _units.Find(u => u.Controller == unit);
+			if(unitView != null)
+				unitView.Return();
 		}
 
-		public void OnUnitsCollision(Unit a, Unit b)
+		public void StartSpawningAnimation()
 		{
-			//TODO: add some  collision logic
+			StartCoroutine(UnitSpawningRoutine());
 		}
-
+				
 		public Material GetWinnerMaterial()
 		{
-			if (_simulation == null || _simulation.ActiveUnits.Count == 0)
+			if (_controller == null || _controller.Simulation == null || _controller.Simulation.ActiveUnits.Count == 0)
 				return null;
-			if (_simulation.ActiveUnits.Count > 0)
+			if (_controller.Simulation.ActiveUnits.Count > 0)
 			{
-				return GetMaterialType(_simulation.ActiveUnits[0].State.Type);
+				return GetColorMaterial(_controller.Simulation.ActiveUnits[0].Type);
 			}
 			return null;
 		}
-		
-		public void LoadSimulationFromJson()
-		{
-			var json = PlayerPrefs.GetString(SIM_SAVE_KEY);
-			var state = JsonUtility.FromJson<SimulationState>(json);
-			LoadSimulation(state);
-		}
 
-		public void SaveSimulation()
+		public Material GetColorMaterial(int type)
 		{
-			if(_simulation == null)
-				return;
-			var state = _simulation.SaveState();
-			var json = JsonUtility.ToJson(state);
-			PlayerPrefs.SetString(SIM_SAVE_KEY, json);
-			PlayerPrefs.Save();
-		}
-
-		public void CreateNewSimulation()
-		{
-			LoadSimulation(new SimulationState());
-			StartCoroutine(UnitSpawningRoutine());
-		}
-
-		public void LoadSimulation(SimulationState state)
-		{
-			_unitsPool.Reset();
-			_simulation = new Simulation(state, _config, this);
-			foreach (var activeUnit in _simulation.ActiveUnits)
+			if (type < 0 || type >= _colors.Length)
 			{
-				CreateUnitView(activeUnit);
+				Debug.LogError("Invalid color index: " + type);
+				return null;
+			}
+			return _colors[type];
+		}
+		
+		public override void Render()
+		{
+			foreach (var unit in _units)
+			{
+				unit.Render();
 			}
 		}
-		
-		public void SetConfig(SimulationConfig config)
+
+		public void Dispose()
 		{
-			_fieldTransform.localScale = new Vector3(config.gameAreaWidth, config.gameAreaHeight, 1);
-			SetCameraSize(config.gameAreaWidth, config.gameAreaHeight);
+			if(_controller != null)
+				_controller.OnUnitDestroyed -= OnUnitDestroyed;
+			if(_unitsPool != null)
+				_unitsPool.Reset();
+			_units.Clear();
 		}
 		
-		public Material GetMaterialType(int typeIndex)
+		public IEnumerator UnitSpawningRoutine()
 		{
-			if (typeIndex < 0 || typeIndex >= _colors.Length)
+			var config = _controller.Config;
+			var unitsLeft = config.numUnitsToSpawn;
+			var simulation = _controller.Simulation;
+			while (unitsLeft > 0)
 			{
-				Debug.LogError("Invalid type index: " + typeIndex + ". Should be between 0 and " + (_colors.Length - 1));
-				return _colors[0];
+				Vector point;
+				float rad;
+				do
+				{
+					rad = Random.Range(config.minUnitRadius, config.maxUnitRadius);
+					var x = Random.Range(-.5f, .5f) * (config.gameAreaWidth - (rad * 2));
+					var y = Random.Range(-.5f, .5f) * (config.gameAreaHeight - (rad * 2));
+					point = new Vector(x, y);
+				} 
+				while (_controller.IsOverlappingUnit(point, rad));
+				
+				var unit = new Unit(point, Vector.Zero, rad, Random.Range(0, _colors.Length));
+				
+				SpawnUnitView(_controller.CreateUnitController(unit));
+				
+				unitsLeft--;
+				
+				yield return new WaitForSeconds(TimeSpan.FromMilliseconds(config.unitSpawnDelay).Seconds);
 			}
-			return _colors[typeIndex];
+
+			foreach (var unit in simulation.ActiveUnits)
+			{
+				var speed = Random.Range(config.minUnitSpeed, config.maxUnitSpeed);
+				unit.Velocity = new Vector(Random.Range(-1f, 1f), Random.Range(-1f,1f)).Normalized * speed;
+			}
 		}
 
-		void SetCameraSize(float width, float height)
+		public void SetFieldSize(float width, float height)
 		{
+			_fieldTransform.localScale = new Vector3(width, height, 1);
 			var aspect = width / height;
 			if (aspect > _cam.aspect)
 			{
@@ -219,47 +142,12 @@ namespace BallGame.View
 			}
 		}
 
-		IEnumerator UnitSpawningRoutine()
-		{
-			var unitsLeft = _config.numUnitsToSpawn;
-			while (unitsLeft > 0)
-			{
-				Vector point;
-				float rad;
-				do
-				{
-					rad = Random.Range(_config.minUnitRadius, _config.maxUnitRadius);
-					var x = Random.Range(-.5f, .5f) * (_config.gameAreaWidth - (rad * 2));
-					var y = Random.Range(-.5f, .5f) * (_config.gameAreaHeight - (rad * 2));
-					point = new Vector(x, y);
-				} 
-				while (_simulation.IsOverlappingUnit(point, rad));
-
-				var unitState = new UnitState(point, Vector.Zero, rad, Random.Range(0, _colors.Length));
-				
-				var unit = new Unit(unitState);
-				
-				_simulation.AddUnit(unit);
-				
-				CreateUnitView(unit);
-				
-				unitsLeft--;
-				
-				yield return new WaitForSeconds(TimeSpan.FromMilliseconds(_config.unitSpawnDelay).Seconds);
-			}
-
-			foreach (var unit in _simulation.ActiveUnits)
-			{
-				var speed = Random.Range(_config.minUnitSpeed, _config.maxUnitSpeed);
-				unit.SetVelocity(new Vector(Random.Range(-1f, 1f), Random.Range(-1f,1f)).Normalized * speed);
-			}
-		}
-		
-		void CreateUnitView(Unit unit)
+		void SpawnUnitView(UnitController controller)
 		{
 			var unitView = _unitsPool.Pick();
-			unitView.SetUp(unit, this);
+			unitView.SetUp(controller, this);
 			_units.Add(unitView);
 		}
+
 	}
 }
