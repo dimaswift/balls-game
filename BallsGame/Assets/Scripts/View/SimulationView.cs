@@ -1,12 +1,8 @@
-﻿using System;
-using System.Collections;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using BallGame.Controllers;
 using BallGame.Model;
 using BallGame.Utils;
 using UnityEngine;
-using UnityEngine.Events;
-using Random = UnityEngine.Random;
 
 namespace BallGame.Views
 {
@@ -41,6 +37,7 @@ namespace BallGame.Views
 				SpawnUnitView(activeUnit);
 			}
 			_controller.OnUnitDestroyed += OnUnitDestroyed;
+			_controller.OnUnitSpawned += SpawnUnitView;
 			SetFieldSize(_controller.Config.gameAreaWidth, _controller.Config.gameAreaHeight);
 		}
 
@@ -51,11 +48,7 @@ namespace BallGame.Views
 				unitView.Return();
 		}
 
-		public void StartSpawningAnimation()
-		{
-			StartCoroutine(UnitSpawningRoutine());
-		}
-				
+
 		public Material GetWinnerMaterial()
 		{
 			if (_controller == null || _controller.Simulation == null || _controller.Simulation.ActiveUnits.Count == 0)
@@ -93,40 +86,7 @@ namespace BallGame.Views
 				_unitsPool.Reset();
 			_units.Clear();
 		}
-		
-		public IEnumerator UnitSpawningRoutine()
-		{
-			var config = _controller.Config;
-			var unitsLeft = config.numUnitsToSpawn;
-			var simulation = _controller.Simulation;
-			while (unitsLeft > 0)
-			{
-				Vector point;
-				float rad;
-				do
-				{
-					rad = Random.Range(config.minUnitRadius, config.maxUnitRadius);
-					var x = Random.Range(-.5f, .5f) * (config.gameAreaWidth - (rad * 2));
-					var y = Random.Range(-.5f, .5f) * (config.gameAreaHeight - (rad * 2));
-					point = new Vector(x, y);
-				} 
-				while (_controller.IsOverlappingUnit(point, rad));
-				
-				var unit = new Unit(point, Vector.Zero, rad, Random.Range(0, _colors.Length));
-				
-				SpawnUnitView(_controller.CreateUnitController(unit));
-				
-				unitsLeft--;
-				
-				yield return new WaitForSeconds(TimeSpan.FromMilliseconds(config.unitSpawnDelay).Seconds);
-			}
 
-			foreach (var unit in simulation.ActiveUnits)
-			{
-				var speed = Random.Range(config.minUnitSpeed, config.maxUnitSpeed);
-				unit.Velocity = new Vector(Random.Range(-1f, 1f), Random.Range(-1f,1f)).Normalized * speed;
-			}
-		}
 
 		public void SetFieldSize(float width, float height)
 		{

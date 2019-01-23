@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
 using BallGame.Model;
+using Bounds = BallGame.Model.Bounds;
+using Random = System.Random;
 
 namespace BallGame.Controllers
 {
@@ -25,6 +27,7 @@ namespace BallGame.Controllers
 
 		public event Action OnSimulationFinished;
 		public event Action<UnitController> OnUnitDestroyed;
+		public event Action<UnitController> OnUnitSpawned;
 		
 		readonly SimulationConfig _config;
 		readonly Simulation _simulation;
@@ -32,9 +35,14 @@ namespace BallGame.Controllers
 		readonly List<UnitController> _activeUnits = new List<UnitController>();
 		readonly float _minRadius;
 		readonly Bounds _bounds;
+		readonly Queue<Unit> _spawnQueue = new Queue<Unit>();
+		readonly Random _random;
+
+		float _unitSpawnTimer;
 		
-		public SimulationController(SimulationConfig config, Simulation simulation, float minRadius)
+		public SimulationController(SimulationConfig config, Simulation simulation, float minRadius, int randomSeed = -1)
 		{
+			_random = randomSeed != -1 ? new Random(randomSeed) : new Random();
 			Speed = 1;
 			_minRadius = minRadius;
 			_config = config;
@@ -52,14 +60,60 @@ namespace BallGame.Controllers
 			if (Speed < 0)
 				Speed = 0;
 
+			ProcessSpawnSequence(deltaTime);
+			
 			UpdatePositions(deltaTime * Speed);
 			UpdateCollisions(deltaTime * Speed);
 
 			_simulation.TimePassed += deltaTime;
 			_simulation.Frame++;
 		}
+		
+		public void CreateUnitSpawnSequence(int typesAmount)
+		{
+			for (int i = 0; i <_config.numUnitsToSpawn; i++)
+			{
+				var speed = RandomRange(_config.maxUnitSpeed, _config.minUnitSpeed);
+				var dir = new Vector(RandomRange(-1f, 1f), RandomRange(-1f, 1f));
+				var unit = new Unit(Vector.Zero, dir * speed, 1, _random.Next(0, typesAmount));
+				_spawnQueue.Enqueue(unit);
+			}
+		}
 
-		public bool IsOverlappingUnit(Vector point, float radius)
+		void ProcessSpawnSequence(float deltaTime)
+		{
+			_unitSpawnTimer -= deltaTime;
+			
+			if (_unitSpawnTimer > 0)
+				return;
+			
+			if (_spawnQueue.Count == 0)
+				return;
+
+			float rad;
+			Vector pos;
+			
+			do
+			{
+				rad = RandomRange(_config.minUnitRadius, _config.maxUnitRadius);
+				var x = RandomRange(-.5f, .5f) * _config.gameAreaWidth - (rad * 2);
+				var y = RandomRange(-.5f, .5f) * _config.gameAreaHeight - (rad * 2);
+				pos = new Vector(x, y);
+			} 
+			while (IsOverlappingUnit(pos, rad));
+
+			var unitToSpawn = _spawnQueue.Dequeue();
+			
+			unitToSpawn.Radius = rad;
+			
+			unitToSpawn.Position = pos;
+			
+			_unitSpawnTimer = (float) TimeSpan.FromMilliseconds(_config.unitSpawnDelay).TotalSeconds;
+			
+			SpawnUnit(unitToSpawn);
+		}
+		
+		bool IsOverlappingUnit(Vector point, float radius)
 		{
 			foreach (var unit in _activeUnits)
 			{
@@ -74,13 +128,24 @@ namespace BallGame.Controllers
 
 			return false;
 		}
+		
+		static float Remap (float value, float from1, float to1, float from2, float to2)
+		{
+			return (value - from1) / (to1 - from1) * (to2 - from2) + from2;
+		}
 
-		public UnitController CreateUnitController(Unit unit)
+		float RandomRange(float min, float max)
+		{
+			return Remap((float)_random.NextDouble(), 0, 1, min, max);
+		}
+
+		void SpawnUnit(Unit unit)
 		{
 			var controller = new UnitController(unit);
 			_simulation.ActiveUnits.Add(unit);
 			_activeUnits.Add(controller);
-			return controller;
+			if (OnUnitSpawned != null)
+				OnUnitSpawned(controller);
 		}
 
 		public float GetTotalRadius(int type)

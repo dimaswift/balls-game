@@ -78,7 +78,7 @@ namespace BallGame
             if(_simulationController == null)
                 return;
             StartSimulation(new Simulation());
-            _simulationView.StartSpawningAnimation();
+            _simulationController.CreateUnitSpawnSequence(_simulationView.Colors.Length);
         }
 
         public void LoadSimulationFromJson()
